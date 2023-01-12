@@ -88,7 +88,6 @@
         "missing_footprint": "warning",
         "net_conflict": "warning",
         "npth_inside_courtyard": "ignore",
-        "overlapping_pads": "warning",
         "padstack": "warning",
         "pth_inside_courtyard": "ignore",
         "shorting_items": "error",
@@ -191,7 +190,10 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [],
+    "erc_exclusions": [
+      "power_pin_not_driven|533400|1041400|ff91cea8-158c-46e8-80fc-2e826dec65f3|00000000-0000-0000-0000-000000000000",
+      "power_pin_not_driven|609600|1117600|e722400d-2da8-4d91-bcd7-6d5eb451dd68|00000000-0000-0000-0000-000000000000"
+    ],
     "meta": {
       "version": 0
     },
@@ -380,6 +382,10 @@
       "hier_label_mismatch": "error",
       "label_dangling": "error",
       "lib_symbol_issues": "warning",
+      "missing_bidi_pin": "warning",
+      "missing_input_pin": "warning",
+      "missing_power_pin": "error",
+      "missing_unit": "warning",
       "multiple_net_names": "warning",
       "net_not_bus_member": "warning",
       "no_connect_connected": "warning",
@@ -389,6 +395,7 @@
       "pin_to_pin": "warning",
       "power_pin_not_driven": "error",
       "similar_labels": "warning",
+      "simulation_model_issue": "error",
       "unannotated": "error",
       "unit_value_mismatch": "error",
       "unresolved_variable": "error",
