@@ -7,12 +7,9 @@ sys.path.append('/')
 
 import site_config
 
-WIFI_LED_PIN = 12
-FAN_PIN = 13
-
 print('FAN switch starting')
 
-fan = Pin(FAN_PIN, Pin.OUT)
+fan = Pin(site_config.fan_pin, Pin.OUT)
 
 class RegistryHandler:
 
@@ -40,7 +37,7 @@ registry = mqtt_reg.Registry(
     wifi_ssid=site_config.wifi_ssid,
     wifi_password=site_config.wifi_password,
     mqtt_broker=site_config.mqtt_broker,
-    ledPin=WIFI_LED_PIN,
+    ledPin=site_config.wifi_led_pin,
     debug=site_config.debug
 )
 

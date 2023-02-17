@@ -2,4 +2,6 @@ wifi_ssid = '???'
 wifi_password='???'
 mqtt_broker='10.1.0.12'
 name='basement'
-debug=True
+wifi_led_pin=4
+fan_pin=3
+debug=False
