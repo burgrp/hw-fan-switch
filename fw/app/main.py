@@ -15,6 +15,12 @@ fan_pwm.init(freq=50000, duty_u16=0)
 
 def update():
     duty = dutyRegister != None and enabledRegister != None and enabledRegister.get_value() and dutyRegister.get_value() or 0
+
+    if duty < 0:
+        duty = 0
+    if duty > 1:
+        duty = 1
+
     print('Fan duty:', duty)
     fan_pwm.duty_u16(int(duty * 65535))
 
@@ -25,10 +31,6 @@ class DutyRegister(mqtt_reg.ClientRegister):
         super().__init__(site_config.name + '.fan.duty')
 
     def set_value(self, value):
-        if value < 0:
-            value = 0
-        if value > 1:
-            value = 1
         super().set_value(value)
         update()
 
