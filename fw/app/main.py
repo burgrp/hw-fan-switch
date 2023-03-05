@@ -1,45 +1,64 @@
-from machine import UART, Pin
-import time
+from machine import PWM, Pin
 import mqtt_reg
 
 import sys
 sys.path.append('/')
-
 import site_config
 
-print('FAN switch starting')
+print('Fan switch starting')
 
-fan = Pin(site_config.fan_pin, Pin.OUT)
+dutyRegister = None
+enabledRegister = None
 
-class RegistryHandler:
+fan_pwm = PWM(Pin(site_config.fan_pin, Pin.OUT))
+fan_pwm.init(freq=50000, duty_u16=0)
 
+def update():
+    duty = dutyRegister != None and enabledRegister != None and enabledRegister.get_value() and dutyRegister.get_value() or 0
+    print('Fan duty:', duty)
+    fan_pwm.duty_u16(int(duty * 65535))
+
+update()
+
+class DutyRegister(mqtt_reg.ClientRegister):
     def __init__(self):
-        pass
+        super().__init__(site_config.name + '.fan.duty')
 
-    def get_names(self):
-        return [site_config.name + ".fan"]
+    def set_value(self, value):
+        if value < 0:
+            value = 0
+        if value > 1:
+            value = 1
+        super().set_value(value)
+        update()
 
-    def get_meta(self, name):
-        return {
-            'device': site_config.name,
-            'title': 'Fan switch state',
-            'type': 'boolean'
-        }
 
-    def get_value(self, name):
-        return fan.value() == 1
+class EnabledRegister(mqtt_reg.BooleanPersistentServerRegister):
+    def __init__(self):
+        super().__init__(
+            site_config.name + '.fan.enabled',
+            {
+                'device': site_config.name,
+                'title': 'Fan switch master enable',
+                'type': 'boolean'
+            }, default=True)
 
-    def set_value(self, name, value):
-        fan.value(1 if value else 0)
+    def set_value(self, value):
+        super().set_value(value)
+        update()
+
+
+dutyRegister = DutyRegister()
+enabledRegister = EnabledRegister()
 
 registry = mqtt_reg.Registry(
-    RegistryHandler(),
     wifi_ssid=site_config.wifi_ssid,
     wifi_password=site_config.wifi_password,
     mqtt_broker=site_config.mqtt_broker,
+    server=[enabledRegister],
+    client=[dutyRegister],
     ledPin=site_config.wifi_led_pin,
     debug=site_config.debug
 )
 
 registry.start()
-
