@@ -1,32 +1,31 @@
-.DEFAULT_GOAL := help
-.PHONY: requirements deploy
+# Thermostat firmware (flat package main, build tag tinygo). Hardware targets
+# (py32, and future stm32/host) are selected by the TinyGo --target and build
+# tags rather than separate directories.
+TARGET_TINYGO = py32f003_32k_4k
+TARGET_PYOCD = py32f003
+CMSIS_PACK = PY32F003
 
-PROJECT_NAME=fan-switch
-BUILDER_IMAGE=ghcr.io/burgrp/mpy-builder-esp32c3:latest
-PORT=/dev/ttyACM0
+IMAGE = image.elf
 
-CONTAINER_NAME=${PROJECT_NAME}-builder
+.PHONY: build flash gdb rtt install-pack disassembly
 
-help:
-	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+build:
+	tinygo build --stack-size 1024b --size html --serial rtt --scheduler tasks -print-allocs=. --gc leaking --target ${TARGET_TINYGO} -o ${IMAGE} .
 
-submodule: ## Initializes and updates git submodules
-	git submodule init
-	git submodule update
-
-start:	## Starts build container
-	podman run -it --rm --name ${CONTAINER_NAME} --privileged -v ${PWD}:/project -v /dev:/dev -w /opt/mpy/ports/esp32 -e BOARD=GENERIC_C3_USB -e PORT=${PORT} ${BUILDER_IMAGE}
-
-vanilla: ## Builds and flashes vanilla MicroPython
-	podman exec -it ${CONTAINER_NAME} make FROZEN_MANIFEST=/project/manifest-dev.py clean deploy
-
-dev: ## Mount application directory, run main and repl
-	podman exec -it -w /project ${CONTAINER_NAME} mpremote reset
+flash: build
+	pkill pyocd || true
 	sleep 1
-	podman exec -it -w /project ${CONTAINER_NAME} mpremote mount -l app exec "import main" repl
+	pyocd load -t ${TARGET_PYOCD} ${IMAGE}
+	pyocd rtt -t ${TARGET_PYOCD}
 
-freeze: ## Builds and flashes frozen application
-	podman exec -it ${CONTAINER_NAME} make FROZEN_MANIFEST=/project/manifest.py clean deploy
+gdb:
+	pyocd gdb --target ${TARGET_PYOCD} --semihosting --persist
 
-flash: ## Flashes last build (vanilla or freeze)
-	podman exec -it ${CONTAINER_NAME} make FROZEN_MANIFEST=/project/manifest.py deploy
+rtt:
+	pyocd rtt -t ${TARGET_PYOCD}
+
+install-pack:
+	pyocd pack install ${CMSIS_PACK}
+
+disassembly: build
+	arm-none-eabi-objdump -dS ${IMAGE} > disassembly.txt

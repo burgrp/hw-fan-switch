@@ -1,3 +1,6 @@
 fabrication-toolkit-options.json
-fan-switch-backups/
+*-backups/
 production/
+bom/
+*autosave*
+*.lck
