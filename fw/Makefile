@@ -2,7 +2,7 @@
 # (py32, and future stm32/host) are selected by the TinyGo --target and build
 # tags rather than separate directories.
 TARGET_TINYGO = py32f003_32k_4k
-TARGET_PYOCD = py32f003
+TARGET_PYOCD = py32f003x6
 CMSIS_PACK = PY32F003
 
 IMAGE = image.elf
