@@ -9,16 +9,12 @@ import (
 	"runtime"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"bob/spec"
 
 	"github.com/burgrp/bleriot/lib/node"
-	"github.com/burgrp/bleriot/lib/shared/config"
-	"github.com/burgrp/bleriot/lib/shared/protocol"
 
-	"github.com/burgrp/tinygo-drivers/bb/spi"
-	"github.com/burgrp/tinygo-drivers/pan211x"
+	"bob/pan211x"
 )
 
 const (
@@ -36,7 +32,17 @@ const (
 	// Fan PWM carrier frequency. 50 kHz keeps the carrier above the audible
 	// range to avoid switching noise.
 	fanPwmFreqHz = 50_000
+	// Minimum duty cycle to kickstart the fan.
+	lowDutyKickstart = 30
+	// Below this duty cycle the fan is considered stopped and the PWM output is 0
+	lowDutyThreshold = 5
 )
+
+type Device struct {
+	node      *node.Node
+	duty      atomic.Int32
+	pwmPeriod uint32
+}
 
 func main() {
 	println("fan-switch starting...")
@@ -50,39 +56,20 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 	pinLed.Low()
 
-	pageData := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(spec.Chip.PageAddr))), spec.Chip.PageBytes)
-	header, cfgBytes, err := config.Decode(pageData)
+	node, cfgBytes, err := pan211x.StartNode(&spec.Chip, pinSpiSck, pinSpiData, pinSpiCsn, device)
 	if err != nil {
-		if config.IsUnprovisioned(err) {
-			haltBlink("unprovisioned", 1000*time.Millisecond)
-		}
-		haltBlink("bad page: "+err.Error(), 100*time.Millisecond)
+		panic("failed to start node: " + err.Error())
 	}
+	device.node = node
+
 	cfg := spec.Config{
 		DefaultDuty: binary.LittleEndian.Uint32(cfgBytes[0:4]),
 	}
 
-	println("Provisioned: channel", int(header.Channel), "spreadFactor", int(header.SpreadFactor))
-
-	radio := pan211x.NewDriverBLELongRange(
-		pan211x.NewRegistersSPI(spi.NewMaster(pinSpiSck, pinSpiData), pinSpiCsn))
-	must(radio.Init(pan211x.ConfigBLELongRange{
-		PayloadLen:      protocol.PacketLen,
-		SerialInterface: pan211x.SerialInterfaceSPI3W,
-		SpreadFactor:    pan211x.SpreadFactor(header.SpreadFactor),
-	}))
-	must(radio.SetChannelRF(header.Channel, header.Channel))
-	must(radio.EnableRxAddress(0, header.Address))
-	println("Radio initialized")
-
 	println("Device config: defaultDuty", cfg.DefaultDuty)
 
-	device.duty.Store(int32(cfg.DefaultDuty))
-	device.setFanDuty(int32(cfg.DefaultDuty))
-
-	node, err := node.New(radio, header.Address, header.Key, device)
-	must(err)
-	device.node = node
+	device.duty.Store(clipValue(int32(cfg.DefaultDuty)))
+	device.setFanDuty(int32(device.duty.Load()))
 
 	//go memstat()
 
@@ -102,12 +89,6 @@ func memstat() {
 	}
 }
 
-type Device struct {
-	node      *node.Node
-	duty      atomic.Int32
-	pwmPeriod uint32
-}
-
 func (d *Device) Read(tag uint16) (value int32, null bool) {
 
 	switch tag {
@@ -124,6 +105,7 @@ func (d *Device) Write(tag uint16, value int32, null bool) {
 
 	switch tag {
 	case spec.RegDuty:
+		value = clipValue(value)
 		d.duty.Store(value)
 		d.setFanDuty(value)
 		pinLed.High()
@@ -166,28 +148,25 @@ func (d *Device) setupFanPWM() {
 
 // setFanDuty applies a duty cycle in percent (0-100) to the fan PWM output.
 func (d *Device) setFanDuty(duty int32) {
-	if duty < 0 {
+
+	if duty < lowDutyThreshold {
 		duty = 0
 	}
-	if duty > 100 {
-		duty = 100
+
+	if duty > 0 && duty < lowDutyKickstart {
+		d.setFanDuty(30)
+		time.Sleep(100 * time.Millisecond)
 	}
+
 	py32.TIM14.SetCCR1(uint32(duty) * d.pwmPeriod / 100)
 }
 
-func must(err error) {
-	if err == nil {
-		return
+func clipValue(value int32) int32 {
+	if value < 0 {
+		return 0
 	}
-	haltBlink("fatal: "+err.Error(), 100*time.Millisecond)
-}
-
-func haltBlink(msg string, period time.Duration) {
-	println(msg)
-	for {
-		pinLed.High()
-		time.Sleep(period)
-		pinLed.Low()
-		time.Sleep(period)
+	if value > 100 {
+		return 100
 	}
+	return value
 }

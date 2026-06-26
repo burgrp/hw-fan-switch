@@ -23,7 +23,7 @@ func main() {
 			},
 			Type: spec.Type,
 			Config: spec.Config{
-				DefaultDuty: 50,
+				DefaultDuty: 30,
 			},
 		},
 	})
