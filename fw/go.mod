@@ -1,4 +1,4 @@
-module bob
+module github.com/burgrp/fan-switch/fw
 
 go 1.25.2
 
