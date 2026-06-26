@@ -1,4 +1,4 @@
-module github.com/burgrp/fan-switch/fw
+module github.com/burgrp/hw-fan-switch/fw
 
 go 1.25.2
 

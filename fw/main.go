@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/burgrp/fan-switch/fw/spec"
+	"github.com/burgrp/hw-fan-switch/fw/spec"
 
 	"github.com/burgrp/bleriot/lib/node"
 
