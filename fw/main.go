@@ -126,6 +126,7 @@ func (d *Device) Write(tag uint16, value int32, null bool) {
 	case spec.RegDuty:
 		d.duty.Store(value)
 		d.setFanDuty(value)
+		pinLed.High()
 		d.node.Notify(spec.RegDuty, value, null)
 	default:
 		// unknown tag: ignore
@@ -172,26 +173,6 @@ func (d *Device) setFanDuty(duty int32) {
 		duty = 100
 	}
 	py32.TIM14.SetCCR1(uint32(duty) * d.pwmPeriod / 100)
-}
-
-func (d *Device) ledLoop(pin machine.Pin, period *atomic.Int32) {
-	for {
-		v := period.Load()
-		switch {
-		case v == 0:
-			pin.Low()
-			time.Sleep(100 * time.Millisecond)
-		case v == 1:
-			pin.High()
-			time.Sleep(100 * time.Millisecond)
-		default:
-			p := time.Duration(v) * time.Millisecond
-			pin.High()
-			time.Sleep(p)
-			pin.Low()
-			time.Sleep(p)
-		}
-	}
 }
 
 func must(err error) {
