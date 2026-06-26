@@ -3,6 +3,7 @@
 package main
 
 import (
+	"device/py32"
 	"encoding/binary"
 	"machine"
 	"runtime"
@@ -24,19 +25,27 @@ const (
 	pinLed = machine.PB0
 	pinFan = machine.PB1
 
-	// PAN211x over 3-wire SPI.
-	pinSpiSck  = machine.PA9  // SCK  → PAN211x pin 2
-	pinSpiData = machine.PA7  // DATA → PAN211x pin 3, bidirectional
-	pinSpiCsn  = machine.PA10 // CSN  → PAN211x pin 1, active-low
+	pinSpiSck  = machine.PA2
+	pinSpiData = machine.PA1
+	pinSpiCsn  = machine.PA4
+)
+
+const (
+	// PB1 alternate function 0 maps to TIM14_CH1 (PY32F003 datasheet Table 3-7).
+	fanPwmAltFunc = 0
+	// Fan PWM carrier frequency. 50 kHz keeps the carrier above the audible
+	// range to avoid switching noise.
+	fanPwmFreqHz = 50_000
 )
 
 func main() {
 	println("fan-switch starting...")
 
-	pinLed.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	pinFan.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	device := &Device{}
 
-	pinFan.Low()
+	pinLed.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	device.setupFanPWM()
+
 	pinLed.High()
 	time.Sleep(500 * time.Millisecond)
 	pinLed.Low()
@@ -68,9 +77,8 @@ func main() {
 
 	println("Device config: defaultDuty", cfg.DefaultDuty)
 
-	device := &Device{}
-
 	device.duty.Store(int32(cfg.DefaultDuty))
+	device.setFanDuty(int32(cfg.DefaultDuty))
 
 	node, err := node.New(radio, header.Address, header.Key, device)
 	must(err)
@@ -95,8 +103,9 @@ func memstat() {
 }
 
 type Device struct {
-	node *node.Node
-	duty atomic.Int32
+	node      *node.Node
+	duty      atomic.Int32
+	pwmPeriod uint32
 }
 
 func (d *Device) Read(tag uint16) (value int32, null bool) {
@@ -116,10 +125,53 @@ func (d *Device) Write(tag uint16, value int32, null bool) {
 	switch tag {
 	case spec.RegDuty:
 		d.duty.Store(value)
+		d.setFanDuty(value)
 		d.node.Notify(spec.RegDuty, value, null)
 	default:
 		// unknown tag: ignore
 	}
+}
+
+// setupFanPWM configures TIM14 channel 1 to drive the fan on PB1 (TIM14_CH1).
+func (d *Device) setupFanPWM() {
+	// The timer clock equals the CPU/APB clock (APB prescaler = 1 after reset).
+	period := machine.CPUFrequency() / fanPwmFreqHz
+	d.pwmPeriod = period
+
+	// Enable the TIM14 peripheral clock.
+	py32.RCC.SetAPBENR2_TIM14EN(1)
+
+	// Route PB1 to TIM14_CH1 (AF0) in alternate-function mode.
+	pinFan.Configure(machine.PinConfig{Mode: machine.PinAlternate})
+	pinFan.SetAltFunc(fanPwmAltFunc)
+
+	tim := py32.TIM14
+	tim.SetPSC(0)          // count at the full timer clock
+	tim.SetARR(period - 1) // PWM period
+	tim.SetCCR1(0)         // start at 0% duty
+
+	// Channel 1 in PWM mode 1 (OC1M = 110) with output-compare preload.
+	tim.SetCCMR1_Output_OC1M(0b110)
+	tim.SetCCMR1_Output_OC1PE(1)
+
+	// Enable auto-reload preload and the channel output (active high).
+	tim.SetCR1_ARPE(1)
+	tim.SetCCER_CC1E(1)
+
+	// Load the preloaded registers via an update event, then start the counter.
+	tim.SetEGR_UG(1)
+	tim.SetCR1_CEN(1)
+}
+
+// setFanDuty applies a duty cycle in percent (0-100) to the fan PWM output.
+func (d *Device) setFanDuty(duty int32) {
+	if duty < 0 {
+		duty = 0
+	}
+	if duty > 100 {
+		duty = 100
+	}
+	py32.TIM14.SetCCR1(uint32(duty) * d.pwmPeriod / 100)
 }
 
 func (d *Device) ledLoop(pin machine.Pin, period *atomic.Int32) {
