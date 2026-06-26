@@ -71,7 +71,11 @@ func main() {
 	device.duty.Store(clipValue(int32(cfg.DefaultDuty)))
 	device.setFanDuty(int32(device.duty.Load()))
 
-	//go memstat()
+	// report free RAM with at least one poll
+	node.Poll()
+	mem := runtime.MemStats{}
+	runtime.ReadMemStats(&mem)
+	println("Free RAM:", mem.Sys-mem.HeapAlloc, "bytes")
 
 	for {
 		node.Poll()
@@ -80,29 +84,16 @@ func main() {
 
 }
 
-func memstat() {
-	for {
-		mem := runtime.MemStats{}
-		runtime.ReadMemStats(&mem)
-		println("mem: alloc", mem.Alloc, "sys", mem.Sys, "alloc", mem.HeapAlloc)
-		time.Sleep(1 * time.Second)
-	}
-}
-
 func (d *Device) Read(tag uint16) (value int32, null bool) {
-
 	switch tag {
 	case spec.RegDuty:
 		return d.duty.Load(), false
 	default:
-		// unknown tag: report null
+		return 0, true
 	}
-
-	return 0, true
 }
 
 func (d *Device) Write(tag uint16, value int32, null bool) {
-
 	switch tag {
 	case spec.RegDuty:
 		value = clipValue(value)
@@ -110,8 +101,6 @@ func (d *Device) Write(tag uint16, value int32, null bool) {
 		d.setFanDuty(value)
 		pinLed.High()
 		d.node.Notify(spec.RegDuty, value, null)
-	default:
-		// unknown tag: ignore
 	}
 }
 
