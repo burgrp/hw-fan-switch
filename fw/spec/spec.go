@@ -29,6 +29,9 @@ var Type = inventory.DeviceType{
 			Type:       inventory.TypeInt,
 			Multiplier: 1,
 			Divider:    1,
+			Metadata: map[string]string{
+				"unit": "%",
+			},
 		},
 	},
 }
