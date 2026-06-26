@@ -23,7 +23,9 @@ func main() {
 			},
 			Type: spec.Type,
 			Config: spec.Config{
-				DefaultDuty: 30,
+				DefaultDuty:      30,
+				LowDutyThreshold: 5,
+				LowDutyKickstart: 30,
 			},
 		},
 	})

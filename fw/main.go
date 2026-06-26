@@ -32,16 +32,16 @@ const (
 	// Fan PWM carrier frequency. 50 kHz keeps the carrier above the audible
 	// range to avoid switching noise.
 	fanPwmFreqHz = 50_000
-	// Minimum duty cycle to kickstart the fan.
-	lowDutyKickstart = 30
-	// Below this duty cycle the fan is considered stopped and the PWM output is 0
-	lowDutyThreshold = 5
 )
 
 type Device struct {
 	node      *node.Node
 	duty      atomic.Int32
 	pwmPeriod uint32
+	// lowDutyThreshold: duty below this is forced to 0 (0 disables the threshold).
+	lowDutyThreshold int32
+	// lowDutyKickstart: duty briefly applied to spin up the fan (0 disables it).
+	lowDutyKickstart int32
 }
 
 func main() {
@@ -63,10 +63,17 @@ func main() {
 	device.node = node
 
 	cfg := spec.Config{
-		DefaultDuty: binary.LittleEndian.Uint32(cfgBytes[0:4]),
+		DefaultDuty:      cfgU32(cfgBytes, 0),
+		LowDutyThreshold: cfgU32(cfgBytes, 4),
+		LowDutyKickstart: cfgU32(cfgBytes, 8),
 	}
 
-	println("Device config: defaultDuty", cfg.DefaultDuty)
+	device.lowDutyThreshold = clipValue(int32(cfg.LowDutyThreshold))
+	device.lowDutyKickstart = clipValue(int32(cfg.LowDutyKickstart))
+
+	println("Device config: defaultDuty", cfg.DefaultDuty,
+		"lowDutyThreshold", cfg.LowDutyThreshold,
+		"lowDutyKickstart", cfg.LowDutyKickstart)
 
 	device.duty.Store(clipValue(int32(cfg.DefaultDuty)))
 	device.setFanDuty(int32(device.duty.Load()))
@@ -138,16 +145,27 @@ func (d *Device) setupFanPWM() {
 // setFanDuty applies a duty cycle in percent (0-100) to the fan PWM output.
 func (d *Device) setFanDuty(duty int32) {
 
-	if duty < lowDutyThreshold {
+	if duty < d.lowDutyThreshold {
 		duty = 0
 	}
 
-	if duty > 0 && duty < lowDutyKickstart {
-		d.setFanDuty(30)
+	if duty > 0 && duty < d.lowDutyKickstart {
+		// Briefly drive at the kickstart duty to overcome the fan's stiction,
+		// then settle to the requested low duty.
+		py32.TIM14.SetCCR1(uint32(d.lowDutyKickstart) * d.pwmPeriod / 100)
 		time.Sleep(100 * time.Millisecond)
 	}
 
 	py32.TIM14.SetCCR1(uint32(duty) * d.pwmPeriod / 100)
+}
+
+// cfgU32 reads a little-endian uint32 from the config bytes at the given offset,
+// returning 0 when the field is absent (e.g. a shorter, older provisioning page).
+func cfgU32(b []byte, off int) uint32 {
+	if len(b) < off+4 {
+		return 0
+	}
+	return binary.LittleEndian.Uint32(b[off : off+4])
 }
 
 func clipValue(value int32) int32 {
