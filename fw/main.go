@@ -14,7 +14,7 @@ import (
 
 	"github.com/burgrp/bleriot/lib/node"
 
-	"bob/pan211x"
+	"github.com/burgrp/bleriot/lib/node/pan211x"
 )
 
 const (
@@ -49,12 +49,12 @@ func main() {
 
 	device := &Device{}
 
-	pinLed.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	device.setupFanPWM()
-
 	pinLed.High()
 	time.Sleep(500 * time.Millisecond)
 	pinLed.Low()
+
+	pinLed.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	device.setupFanPWM()
 
 	node, cfgBytes, err := pan211x.StartNode(&spec.Chip, pinSpiSck, pinSpiData, pinSpiCsn, device)
 	if err != nil {
