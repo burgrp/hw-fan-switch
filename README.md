@@ -4,6 +4,8 @@ A small, wirelessly-controlled 12 V DC fan switch. It drives a fan with a
 variable PWM duty cycle and is controlled over a BLE long-range radio link,
 making it part of the [Bleriot](https://github.com/burgrp/bleriot) node network.
 
+![PCB](pcb.png)
+
 The board is built around a **Puya PY32F003** Cortex-M0+ microcontroller with a
 **PAN211x** radio, and the firmware is written in Go and compiled with
 [TinyGo](https://tinygo.org/).
