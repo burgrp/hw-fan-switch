@@ -37,4 +37,4 @@ provision:
 	go run . provision
 
 hub:
-	go run . hub
+	go run . hub --diagnostics rf
