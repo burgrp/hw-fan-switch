@@ -2,7 +2,7 @@ module github.com/burgrp/hw-fan-switch/fw
 
 go 1.25.2
 
-require github.com/burgrp/bleriot/lib v1.0.0
+require github.com/burgrp/bleriot/lib v1.1.1
 
 require (
 	github.com/burgrp/tinygo-drivers/bb/spi v1.0.0 // indirect

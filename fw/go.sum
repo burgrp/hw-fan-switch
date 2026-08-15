@@ -1,5 +1,5 @@
-github.com/burgrp/bleriot/lib v1.0.0 h1:EG+Abnrs3dn6OLEQ93Cx3Bd1TTLVu3p+mikk1N/Q/4s=
-github.com/burgrp/bleriot/lib v1.0.0/go.mod h1:uqITcZhUdEGoHM0bYBenzebvUqmr+g3h+S1jy9YeRJA=
+github.com/burgrp/bleriot/lib v1.1.1 h1:DGKhabETeeIdXW34lu/zLB7GlKN1zC2FAveyjvn+Wfk=
+github.com/burgrp/bleriot/lib v1.1.1/go.mod h1:rz2mv+y2MVwLCA9C2ZZ2gVWMqcEQlRSwrwdzYYOrw0E=
 github.com/burgrp/reg v1.0.12 h1:HwIoFrv06NBaJxZuyOIGHtwQ/MX7K4EJnEZm+fGAnz4=
 github.com/burgrp/reg v1.0.12/go.mod h1:hvDI6sL/cvfcOCCA+reXCe8T6eMgqAJxj7OClXq99zw=
 github.com/burgrp/tinygo-drivers/bb/spi v1.0.0 h1:vJg7NLwEL7Dlqln6lH3Zfid/7o7qDLC+lnY/XD4YU5Y=

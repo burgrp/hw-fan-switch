@@ -4,7 +4,6 @@ package main
 
 import (
 	"device/py32"
-	"encoding/binary"
 	"machine"
 	"runtime"
 	"sync/atomic"
@@ -44,7 +43,7 @@ type Device struct {
 	lowDutyKickstart int32
 }
 
-func main() {
+func bleriotMain(prov node.Provisioning, cfg spec.Config) {
 	println("fan-switch starting...")
 
 	device := &Device{}
@@ -56,17 +55,11 @@ func main() {
 	pinLed.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	device.setupFanPWM()
 
-	node, cfgBytes, err := pan211x.StartNode(&spec.Chip, pinSpiSck, pinSpiData, pinSpiCsn, device)
+	node, err := pan211x.StartNode(prov, pinSpiSck, pinSpiData, pinSpiCsn, device)
 	if err != nil {
 		panic("failed to start node: " + err.Error())
 	}
 	device.node = node
-
-	cfg := spec.Config{
-		DefaultDuty:      cfgU32(cfgBytes, 0),
-		LowDutyThreshold: cfgU32(cfgBytes, 4),
-		LowDutyKickstart: cfgU32(cfgBytes, 8),
-	}
 
 	device.lowDutyThreshold = clipValue(int32(cfg.LowDutyThreshold))
 	device.lowDutyKickstart = clipValue(int32(cfg.LowDutyKickstart))
@@ -157,15 +150,6 @@ func (d *Device) setFanDuty(duty int32) {
 	}
 
 	py32.TIM14.SetCCR1(uint32(duty) * d.pwmPeriod / 100)
-}
-
-// cfgU32 reads a little-endian uint32 from the config bytes at the given offset,
-// returning 0 when the field is absent (e.g. a shorter, older provisioning page).
-func cfgU32(b []byte, off int) uint32 {
-	if len(b) < off+4 {
-		return 0
-	}
-	return binary.LittleEndian.Uint32(b[off : off+4])
 }
 
 func clipValue(value int32) int32 {
