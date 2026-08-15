@@ -20,16 +20,16 @@ The board is built around a **Puya PY32F003** Cortex-M0+ microcontroller with a
   - **Low-duty kickstart** — a brief higher-duty pulse to overcome fan stiction
     when starting at low speed.
 - Wireless control and telemetry over the PAN211x BLE long-range link.
-- Persistent per-device provisioning (address, key, channel and config) stored
-  in the MCU's configuration flash page.
+- Device identity, radio settings, and configuration are owned by the site
+  inventory and baked into each firmware image at build time.
 
 ## Repository layout
 
 | Path | Description |
 | --- | --- |
 | `board/` | KiCad hardware design (schematic, PCB, BOM, production files). |
-| `fw/` | TinyGo firmware and the host-side CLI (provisioning, hub). |
-| `fw/spec/` | Device specification: registers and the provisioning `Config`. |
+| `fw/` | TinyGo firmware and a host-side test inventory. |
+| `fw/spec/` | Device specification: registers and runtime `Config`. |
 | `sub/hw-kicad/` | Shared KiCad symbol/footprint library (git submodule). |
 
 ## Hardware
@@ -51,6 +51,9 @@ The firmware is a flat `package main` selected by build tags: the `tinygo` build
 (`main.go`) is the on-device application, while the `!tinygo` build
 (`test-hub.go`) provides a host-side test hub. Hardware targets are chosen via
 the TinyGo `--target` and build tags rather than separate directories.
+`fw/main_gen.go` is generated from the inventory and gitignored; it contains
+the `main` function that supplies the baked identity and configuration to the
+firmware application.
 
 ### Prerequisites
 
@@ -64,44 +67,38 @@ Clone with submodules:
 git clone --recurse-submodules https://github.com/burgrp/hw-fan-switch.git
 ```
 
-### Build & flash
+### Build and flash
 
-All commands run from the `fw/` directory.
-
-```sh
-# One-time: install the CMSIS pack for the target
-make install-pack
-
-# Build the firmware image (image.elf)
-make build
-
-# Flash the device and stream RTT logs
-make flash
-
-# Stream RTT logs from a running device
-make rtt
-```
-
-### Provisioning
-
-Each device is provisioned with an identity (address, key, channel) and its
-`Config` (default duty and low-duty parameters), which is written to the MCU's
-configuration flash page.
+Build deployment firmware from the authoritative site inventory. For the AGC
+checkout and its `basement.fan` instance:
 
 ```sh
-# Create a new device identity
-make new
+cd /home/paul/git/agc/bleriot
 
-# Write the provisioning page to the connected device
-make provision
+# Inspect the generated entry point without writing it
+go run . gen basement.fan
 
-# Run the control hub
-make hub
+# One-time: install the target CMSIS pack
+go run . make --root /home/paul/git/hw-fan-switch/fw basement.fan install-pack
+
+# Generate main_gen.go and build image.elf
+go run . make --root /home/paul/git/hw-fan-switch/fw basement.fan build
+
+# Generate, build, flash, and open RTT
+go run . make --root /home/paul/git/hw-fan-switch/fw basement.fan flash
+
+# Open RTT without flashing
+go run . make --root /home/paul/git/hw-fan-switch/fw basement.fan rtt
 ```
+
+The `bleriot make` command resolves the selected inventory instance, writes its
+identity and `Config` to `fw/main_gen.go`, injects the chip's TinyGo and pyOCD
+targets, then delegates to the firmware Makefile. The generated file is local
+build state and must not be committed.
 
 ## Configuration
 
-The provisioning `Config` (see `fw/spec/spec.go`) controls runtime behaviour:
+The inventory `Config` (see `fw/spec/spec.go`) controls runtime behaviour:
 
 | Field | Meaning |
 | --- | --- |

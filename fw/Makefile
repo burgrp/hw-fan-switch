@@ -1,13 +1,21 @@
-# Thermostat firmware (flat package main, build tag tinygo). Hardware targets
-# (py32, and future stm32/host) are selected by the TinyGo --target and build
-# tags rather than separate directories.
-TARGET_TINYGO = py32f003x6
-TARGET_PYOCD = py32f003x6
-CMSIS_PACK = PY32F003
+# Fan switch node firmware. The inventory-driven "bleriot make" command writes
+# main_gen.go and injects the chip targets plus BLERIOT_MAKE.
+#
+# Direct make goals bounce through the local test inventory. Deployment builds
+# should be run from the authoritative site inventory.
+ifndef BLERIOT_MAKE
+
+$(or $(MAKECMDGOALS),build): __bleriot_bounce
+	@:
+.PHONY: __bleriot_bounce $(MAKECMDGOALS)
+__bleriot_bounce:
+	@go run . make $(MAKECMDGOALS)
+
+else
 
 IMAGE = image.elf
 
-.PHONY: build flash gdb rtt install-pack disassembly new provision hub
+.PHONY: build flash gdb rtt install-pack disassembly new hub
 
 build:
 	tinygo build --stack-size 1024b --size html --serial rtt --scheduler tasks -print-allocs=. --gc leaking --target ${TARGET_TINYGO} -o ${IMAGE} .
@@ -33,8 +41,7 @@ disassembly: build
 new:
 	go run . new
 
-provision:
-	go run . provision
-
 hub:
 	go run . hub --diagnostics rf
+
+endif
