@@ -28,8 +28,9 @@ The board is built around a **Puya PY32F003** Cortex-M0+ microcontroller with a
 | Path | Description |
 | --- | --- |
 | `board/` | KiCad hardware design (schematic, PCB, BOM, production files). |
-| `fw/` | TinyGo firmware and a host-side test inventory. |
+| `fw/` | Importable TinyGo firmware and board-owned build profile. |
 | `fw/spec/` | Device specification: registers and runtime `Config`. |
+| `fw/cmd/dev/` | Optional local development inventory. |
 | `sub/hw-kicad/` | Shared KiCad symbol/footprint library (git submodule). |
 
 ## Hardware
@@ -47,13 +48,12 @@ positions) under `board/production/`.
 
 ## Firmware
 
-The firmware is a flat `package main` selected by build tags: the `tinygo` build
-(`main.go`) is the on-device application, while the `!tinygo` build
-(`test-hub.go`) provides a host-side test hub. Hardware targets are chosen via
-the TinyGo `--target` and build tags rather than separate directories.
-`fw/main_gen.go` is generated from the inventory and gitignored; it contains
-the `main` function that supplies the baked identity and configuration to the
-firmware application.
+The firmware is the importable `fanswitch` package. Its TinyGo implementation
+exports `Run`, while `fw/spec` exposes `Config`, the register table, chip, and a
+typed build/flash profile. BleRiot generates a private external `package main`
+inside the deployment module and calls `Run` with that instance's baked identity
+and configuration. Nothing is generated in this repository for a deployment
+build.
 
 ### Prerequisites
 
@@ -76,25 +76,27 @@ checkout and its `basement.fan` instance:
 cd /home/paul/git/agc/bleriot
 
 # Inspect the generated entry point without writing it
-go run . gen basement.fan
+go run . node gen --name basement.fan
 
 # One-time: install the target CMSIS pack
-go run . make --root /home/paul/git/hw-fan-switch/fw basement.fan install-pack
+go run . node install-pack --name basement.fan
 
-# Generate main_gen.go and build image.elf
-go run . make --root /home/paul/git/hw-fan-switch/fw basement.fan build
+# Generate the private entry point and build image.elf
+go run . node build --name basement.fan
 
 # Generate, build, flash, and open RTT
-go run . make --root /home/paul/git/hw-fan-switch/fw basement.fan flash
+go run . node build --name basement.fan --flash --rtt
 
 # Open RTT without flashing
-go run . make --root /home/paul/git/hw-fan-switch/fw basement.fan rtt
+go run . node rtt --name basement.fan
 ```
 
-The `bleriot make` command resolves the selected inventory instance, writes its
-identity and `Config` to `fw/main_gen.go`, injects the chip's TinyGo and pyOCD
-targets, then delegates to the firmware Makefile. The generated file is local
-build state and must not be committed.
+The `bleriot node` commands resolve the selected inventory instance. `node
+build` generates its identity and `Config` under that deployment's private
+`.bleriot` directory, then builds this module using the profile carried by
+`spec.Type`. The deployment pins the firmware version in `go.mod`; it does not
+carry fan-specific build flags. This repository's Makefile contains optional
+aliases for `fw/cmd/dev`.
 
 ## Configuration
 
@@ -114,5 +116,5 @@ The device exposes a single register over the Bleriot network:
 | --- | --- | --- | --- | --- |
 | `duty` | 1 | int | % | PWM duty cycle, 0–100. |
 
-Writing `duty` updates the fan speed and notifies the network; reading it returns
-the current duty.
+Writing `duty` updates the fan speed; the hub's next scheduled GET observes the
+new value. A NULL write stops the fan. Reading returns the current duty.

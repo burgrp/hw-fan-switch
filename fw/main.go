@@ -1,6 +1,6 @@
 //go:build tinygo
 
-package main
+package fanswitch
 
 import (
 	"device/py32"
@@ -34,7 +34,6 @@ const (
 )
 
 type Device struct {
-	node      *node.Node
 	duty      atomic.Int32
 	pwmPeriod uint32
 	// lowDutyThreshold: duty below this is forced to 0 (0 disables the threshold).
@@ -43,7 +42,8 @@ type Device struct {
 	lowDutyKickstart int32
 }
 
-func bleriotMain(prov node.Provisioning, cfg spec.Config) {
+// Run starts the fan-switch firmware with baked provisioning and configuration.
+func Run(prov node.Provisioning, cfg spec.Config) {
 	println("fan-switch starting...")
 
 	device := &Device{}
@@ -59,8 +59,6 @@ func bleriotMain(prov node.Provisioning, cfg spec.Config) {
 	if err != nil {
 		panic("failed to start node: " + err.Error())
 	}
-	device.node = node
-
 	device.lowDutyThreshold = clipValue(int32(cfg.LowDutyThreshold))
 	device.lowDutyKickstart = clipValue(int32(cfg.LowDutyKickstart))
 
@@ -96,11 +94,10 @@ func (d *Device) Read(tag uint16) (value int32, null bool) {
 func (d *Device) Write(tag uint16, value int32, null bool) {
 	switch tag {
 	case spec.RegDuty:
-		value = clipValue(value)
+		value = normalizedDuty(value, null)
 		d.duty.Store(value)
 		d.setFanDuty(value)
 		pinLed.High()
-		d.node.Notify(spec.RegDuty, value, null)
 	}
 }
 
@@ -150,14 +147,4 @@ func (d *Device) setFanDuty(duty int32) {
 	}
 
 	py32.TIM14.SetCCR1(uint32(duty) * d.pwmPeriod / 100)
-}
-
-func clipValue(value int32) int32 {
-	if value < 0 {
-		return 0
-	}
-	if value > 100 {
-		return 100
-	}
-	return value
 }
