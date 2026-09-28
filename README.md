@@ -20,6 +20,8 @@ The board is built around a **Puya PY32F003** Cortex-M0+ microcontroller with a
   - **Low-duty kickstart** — a brief higher-duty pulse to overcome fan stiction
     when starting at low speed.
 - Wireless control and telemetry over the PAN211x BLE long-range link.
+- Yellow status LED is steadily on while the hub is online and flashes briefly
+  once per second while offline.
 - Device identity, radio settings, and configuration are owned by the site
   inventory and baked into each firmware image at build time.
 
@@ -37,11 +39,15 @@ The board is built around a **Puya PY32F003** Cortex-M0+ microcontroller with a
 
 | Function | Pin |
 | --- | --- |
-| Status LED | `PB0` |
+| Yellow status LED | `PB0` |
 | Fan PWM output (TIM14_CH1, AF0) | `PB1` |
 | Radio SPI clock | `PA2` |
 | Radio SPI data | `PA1` |
 | Radio SPI chip select | `PA4` |
+
+The status LED is active high. A successfully decoded hub packet keeps the node
+online for five seconds. While online the LED remains on; after the timeout it
+follows BleRiot's 200 ms on, 800 ms off heartbeat until another packet arrives.
 
 The KiCad project lives in `board/`, with fabrication outputs (Gerbers, BOM,
 positions) under `board/production/`.

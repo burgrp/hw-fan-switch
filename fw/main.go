@@ -48,11 +48,8 @@ func Run(prov node.Provisioning, cfg spec.Config) {
 
 	device := &Device{}
 
-	pinLed.High()
-	time.Sleep(500 * time.Millisecond)
-	pinLed.Low()
-
 	pinLed.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	pinLed.Low()
 	device.setupFanPWM()
 
 	node, err := pan211x.StartNode(prov, pinSpiSck, pinSpiData, pinSpiCsn, device)
@@ -70,16 +67,23 @@ func Run(prov node.Provisioning, cfg spec.Config) {
 	device.setFanDuty(int32(device.duty.Load()))
 
 	// report free RAM with at least one poll
-	node.Poll()
+	pollNode(node)
 	mem := runtime.MemStats{}
 	runtime.ReadMemStats(&mem)
 	println("Free RAM:", mem.Sys-mem.HeapAlloc, "bytes")
 
 	for {
-		node.Poll()
+		pollNode(node)
 		runtime.Gosched()
 	}
 
+}
+
+func pollNode(runtimeNode *node.Node) {
+	online, heartbeat, changed := runtimeNode.PollWithStatus()
+	if changed {
+		pinLed.Set(statusLEDOn(online, heartbeat))
+	}
 }
 
 func (d *Device) Read(tag uint16) (value int32, null bool) {
@@ -97,7 +101,6 @@ func (d *Device) Write(tag uint16, value int32, null bool) {
 		value = normalizedDuty(value, null)
 		d.duty.Store(value)
 		d.setFanDuty(value)
-		pinLed.High()
 	}
 }
 
